@@ -1,11 +1,12 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
+use std::fs::File;
+use std::io::prelude::*;
+
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
-use rand::distributions::Uniform;
-use rand::Rng;
 use winit::{
     dpi::LogicalSize,
     window::WindowBuilder,
@@ -18,11 +19,16 @@ const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 256;
 
 struct WaveformDisplay {
-    values: [i16; WIDTH as usize],
+    values: [u8; WIDTH as usize],
 }
 
 fn main() -> Result<(), Error> {
     env_logger::init();
+
+    let mut f = File::open("test_input.dat").unwrap();
+    let mut buffer: [u8; WIDTH as usize] = [127; WIDTH as usize];
+    f.read(&mut buffer).expect("Cannot read source file");
+
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = {
@@ -41,7 +47,7 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
-    let display = WaveformDisplay::new();
+    let display = WaveformDisplay::new(buffer);
     event_loop.run(move |event, _, control_flow| {
         if let Event::RedrawRequested(_) = event {
             display.draw(pixels.frame_mut());
@@ -72,33 +78,19 @@ fn main() -> Result<(), Error> {
 }
 
 impl WaveformDisplay {
-    fn new() -> Self {
-        // let value_range: Uniform<i16> = Uniform::new_inclusive(-120, 120);
-        let value_range: Uniform<i16> = Uniform::new_inclusive(-10, 10);
-
-        // let randoms: Vec<i16> = (0..WIDTH as usize)
-        //     .map(|_| {
-        //         rng.gen_range(-120..121) as i16
-        //     })
-        //     .collect();
+    fn new(buffer: [u8; WIDTH as usize]) -> Self {
         Self {
-            // values: randoms.try_into().unwrap()
-            values: rand::thread_rng()
-                .sample_iter(value_range)
-                .take(WIDTH as usize)
-                .collect::<Vec<i16>>()
-                .try_into()
-                .unwrap()
+            values: buffer
         }
     }
 
     fn draw(&self, frame: &mut [u8]) {
-        println!("val: {}", self.values[0 as usize]);
+        // println!("val: {}", self.values[0 as usize]);
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let x = (i % WIDTH as usize) as i16;
-            let y = (i / WIDTH as usize) as i16 - 120;
+            let x = i % WIDTH as usize;
+            let y = 255u8 - (i / WIDTH as usize) as u8;
 
-            let rgba = if y == self.values[x as usize] { [0x0, 0x7f, 0x7f, 0xff] } else { [0x0, 0x0, 0x0, 0xff] };
+            let rgba = if y == self.values[x] { [0x0, 0x7f, 0x7f, 0xff] } else { [0x0, 0x0, 0x0, 0xff] };
 
             pixel.copy_from_slice(&rgba);
         }
