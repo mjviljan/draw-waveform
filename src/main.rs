@@ -1,8 +1,9 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
+use std::env;
 use std::fs::File;
-use std::io::prelude::*;
+use std::io::Read;
 
 use error_iter::ErrorIter as _;
 use log::error;
@@ -25,7 +26,19 @@ struct WaveformDisplay {
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let mut f = File::open("test_input.dat").unwrap();
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        return exit_with_message("\nNo filename given.\n\nUsage:\n  cargo run <filename>\n");
+    }
+
+    let filename = args[1].clone();
+    let mut f = match File::open(filename.clone()) {
+        Ok(file) => file,
+        Err(err) => {
+            log_error("file.open", err);
+            return exit_with_message(&format!("\nFile not found: {}.\n", filename));
+        }
+    };
     let mut buffer: [u8; WIDTH as usize] = [127; WIDTH as usize];
     f.read(&mut buffer).expect("Cannot read source file");
 
@@ -102,4 +115,9 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
     for source in err.sources().skip(1) {
         error!("  Caused by: {source}");
     }
+}
+
+fn exit_with_message(message: &str) -> Result<(), Error> {
+    println!("{}", message);
+    Ok(())
 }
